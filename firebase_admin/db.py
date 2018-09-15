@@ -28,6 +28,8 @@ import threading
 import requests
 import six
 from six.moves import urllib
+from string import replace
+from urllib import urlencode
 
 import firebase_admin
 from firebase_admin import _http_client
@@ -598,6 +600,21 @@ class Query(object):
             params.append('{0}={1}'.format(key, self._params[key]))
         return '&'.join(params)
 
+    @property
+    def _queryurl(self):
+        if self._params:
+            return Query._escapeQueryChars(urlencode(self._params))
+        else:
+            return None
+
+    @staticmethod
+    def _escapeQueryChars(text):
+        text = replace(text, '%22', '"')
+        text = replace(text, '%27', "'")
+        text = replace(text, '%24', '$')
+        text = replace(text, '%2B', '\u002B')
+        return text
+        
     def get(self):
         """Executes this Query and returns the results.
 
@@ -609,7 +626,12 @@ class Query(object):
         Raises:
           ApiCallError: If an error occurs while communicating with the remote database server.
         """
-        result = self._client.body('get', self._pathurl, params=self._querystr)
+        url = self._pathurl
+        queryurl = self._queryurl
+        if queryurl is not None:
+            url = "%s?%s" % (url, queryurl)
+
+        result = self._client.body('get', url=url)
         if isinstance(result, (dict, list)) and self._order_by != '$priority':
             return _Sorter(result, self._order_by).get()
         return result
